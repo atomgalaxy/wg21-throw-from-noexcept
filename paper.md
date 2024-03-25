@@ -7,9 +7,22 @@ audience:
 author:
   - name: Gašper Ažman
     email: <gasper.azman@gmail.com>
+  - name: Jeff Snyder
+    email: <jeff@caffeinated.me.uk>
 toc: true
 toc-depth: 2
 ---
+
+<!--
+TODO:
+- remove the "Lakos Rule" references from the text.
+- suggest throwing while an uncaught exception is in flight (such as from a
+  destructor) is also a contract violation.
+- bring up that we need to be able to enforce that handlers do not throw at
+  compile time (Louis) - we have a paper for that, too
+- mention that these kinds of postconditions need to be separately configurable
+
+-->
 
 # Introduction
 
@@ -31,8 +44,12 @@ call the violation handler.
 # Proposal
 
 We propose that throwing from a `noexcept` function be treated as a violation
-of a _postcondition assertion_, and not unconditionally call
+of a _postcondition assertion_, instead of unconditionally calling
 `std::terminate()`.
+
+This postcondition would be the "last" (outermost) postcondition to evaluate,
+so any exceptions that a violation handler throws due to other postconditions
+still hit the `noexcept` barrier.
 
 # Rationale
 
@@ -57,9 +74,9 @@ This property is important in
 The `std::terminate()` semantic is unlikely to be relied upon as a matter of
 deliberate control flow. It is quite clearly a stand-in for a postcondition
 violation; people do rely on exit handlers for recovery `std::terminate`
-happens to get called because of a bug - but the author finds it highly
-doubtful that someone would rely on an exception calling `std::terminate()`
-instead of calling `std::terminate()` explicitly.
+happens to get called because of a bug - but it seems doubtful that someone
+would rely on an exception calling `std::terminate()` instead of calling
+`std::terminate()` explicitly.
 
 If we instead redefine throwing from a `noexcept` function as a contract
 violation, a violation handler could instead just let the exception propagate
@@ -75,15 +92,16 @@ void handle_contract_violation(contract_violation const& violation) {
     if (violation.detection_mode() != evaluation_exception) {
         // 1 - the precondition to be checked will emit this
         throw MyTestException(violation);
-    } else {
-        // we have an exception, see what it is
-        try { // any noexcept barriers we hit should propagate test exceptions
-            rethrow_exception(p);
-        } catch (MyTestException const&) { // it's a test exception
-            throw; // rethrow it
-        }
     }
-    invoke_default_violation_handler(); // different problem, don't propagate
+    // 2 - if the exception-in-flight is the one we just threw in (1)
+    try {
+        throw;
+    } catch (MyTestException const&) { // it's a test exception
+        throw; // rethrow it
+    } catch (...) {
+        // for other exceptions, noexcept is still noexcept
+        invoke_default_violation_handler(violation);
+    }
 }
 ```
 
@@ -101,6 +119,68 @@ post-condition on a function, but with a default of the `ignore` semantic.
 
 We should really unify this universe of exceptionless postconditions.
 
+# Viability of negative testing
+
+Negative testing has to be done very carefully - after all, the test program
+deliberately calls the function-under-test out-of-contract.
+
+As an example, code that is exception-unsafe cannot be negative-tested using exceptions.
+
+```cpp
+void wrapper1(std::function<void>()noexcept f)
+{
+    std::lock_guard g(some_lock);
+    ...
+    std::unlock_guard(g);
+     wrapper2(f);
+}
+
+void wrapper2(std::function<void>()noexcept f)
+{
+    some_lock.lock();
+    f();
+    some_lock.unlock();
+}
+
+wrapper1([]pre(false){}); // deadlocks
+```
+
+```cpp
+std::mutex r;
+
+template <typename F>
+void with_something(F f) noexcept requires(noexcept(f()))
+{
+    r.lock();
+    f();
+    r.unlock()
+}
+```
+
+Negative-testing `f()` _through_ `with_something` will deadlock the next test.
+Note, however, that `f()` is deliberately invoked out-of-contract, and
+therefore already requires extreme care. Having some tests is better than
+having none, so this proposal still leaves the engineer in a more capable
+position.
+
+# ABI considerations
+
+## Is this an ABI break?
+
+Not... necessarily. Yes. But not a bad one.
+
+Of course, we are changing semantics. However, `std::terminate` is a valid
+implementation of an implementation-defined handler for a specific violation
+semantic, so technically today's code is conforming.
+
+The change comes if you set your own violation handler and set the semantic (in
+an implementation-defined way) to not be the kind that calls
+`std::terminate()`, but at that point you're already recompiling your code.
+
+## Can I link with past code?
+
+Su
+
 # Prior art
 
 - [@N3248] discusses the reasons we need the Lakos rule, which are obviated by the proposed change
@@ -110,3 +190,17 @@ We should really unify this universe of exceptionless postconditions.
 - [@P2946R1] says that `[[throws_nothing]]` could imply a contract violation on throwing
 - [@P3155R0] proposes the application of the Lakos rule in the standard library
 - [@P3085R0] has a similar conception of what `noexcept` means.
+
+# FAQ
+
+- If an assertion fails due to the predicate exiting via exception, the
+  violation handler throws, does that exception still hit the function's
+  `noexcept` barrier and `std::terminate()`?
+
+Yes.
+
+
+# Acknowledgements
+
+- Jonas Persson contributed comments with regards to noexcept destructors,
+  double throws, and unwinding code generation overhead.
