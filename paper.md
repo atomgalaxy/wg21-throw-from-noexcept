@@ -51,7 +51,7 @@ we have contract violation handlers.
 
 We propose to change the effect of throwing from a `noexcept` function be
 a function postcondition violation, have configurable semantics as per the
-Contracts MVP ([@P2900]), and therefore, in `observe` and `enforce` modes,
+Contracts MVP ([@P2900R5]), and therefore, in `observe` and `enforce` modes,
 call the violation handler.
 
 # Proposal
