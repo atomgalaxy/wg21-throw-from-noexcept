@@ -34,7 +34,11 @@ TODO:
 - Ville's objection - TU with ignore semantic calls noexcept function in another TU with enforce semantic, resulting in exception flying by the barrier unhindered. proposed resolution - allow the tradeoff of having no stack unwind destructor invocations, as the price for allowing negative testing in the presence of noexcept; anyone using a throwing violation handler in production gets what they bargained for; or as a matter of QoI there could be build flags canceling the noexcept optimizations, thus providing for throwing violation handlers in production for Bjarne's nuclear plant use case
  - in multiple exception situations, what does current_exception() return? can we get a current exception list of all of them? what if there are several exceptions of the same type? and how does catch() behave?
  - note: some of these points originate in this reflector thread: http://lists.isocpp.org/sg21/2024/03/7206.php
-
+- from Bengt: It would be easier to understand the logic if you showed a noexcept function with a pre-condition and the sequence of events when a test case calls the function out of contract from this call until the test framework detects that the condition violation triggered.
+- cite D3138R0 as an alternative to negative testing in most cases
+- rephrase the paper in terms of unifying erroneous behaviour handling and response - and if the application wants to continue after erroneous behaviour, that should be a choice available to the programmer
+- talk about having different tool switches for erroneout behaviour than for normal postconditions
+- postcondition -> epilogue, and introduce that nomenclature
 -->
 
 # Introduction
