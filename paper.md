@@ -39,7 +39,7 @@ function contract.
 There is a concerted effort underway in WG21 to both classify and figure out
 what to do with erroneous behavior in general:
 
-- Thomas Koppe's [TODO PAPER REF] introduces the concept of Erroneous behaviour
+- Thomas Koppe's [@P2795R4] introduces the concept of Erroneous behaviour
   into the language.
 - The entire Contracts facility ([@P2900R5] and associated papers from SG21)
   could be seen as a way to let users define and catch erroneous behaviour at
@@ -61,7 +61,10 @@ status-quo.
 
 # Definitions
 
-As per Lisa Lippincott's work on function interfaces [TODO CITATION], a
+This secition defines the terms **prologue** and **epilogue**; it shows how
+`pre` and `post` assertions map to them, and 
+
+As per Lisa Lippincott's work on function interfaces [@P0465R0], a
 function's contract checking interface comprises a function *prologue* and a
 function *epilogue*.
 
@@ -101,22 +104,27 @@ captured.
 As an example, line (PRE) is equivalent to the [@P2900R5] `pre (x > 0)`, if we
 apply the `pre` assertion flavor to it.
 
-The function **epilogue** (POST1, T2, T3, T4) notionally runs after the return
+The function **epilogue** (POST2, T2, T3, T4) notionally runs after the return
 value has been constructed and the function body has exited; all local
 variables have been destroyed, but the function arguments are still within
 lifetime. It is here that postconditions are checked, for instance.
 
-As an example, lines (POST, POST2) are equivalent to [TODO CAPTURES CITATION]
-`post [old_x = x] (r: old_x < r)`, if we apply the `post` assertion flavor to
-(POST2).
+As an example, lines (POST1, POST2) are equivalent to [@P3098R0]'s
+(postcondition captures_ `post [old_x = x] (r: old_x < r)`, if we apply the
+`post` assertion flavor to (POST2).
 
-The construct in lines (T1, T2, T3, T4) is equivalent to the [@2946R1]
-`[[throws_nothing]]` (with the `ignore` semantic), and would be equivalent to
-`noexcept` if it were reflectable (with the `noexcept()` query).
-
-We should really unify this universe of exceptionless postconditions.
+The construct in lines (T1, T2, T3, T4) is equivalent to the [@P2946R1]
+`[[throws_nothing]]` (with the `ensure` semantic), and would be equivalent to
+`noexcept` if it were reflectable (with the `noexcept()` query). This paper
+provisionally labels this section with the `excspec` assertion kind (see
+below), but we might need to split it into `exc`` and `excspec` later.
 
 # Proposed semantics
+
+**Note**: in the current contracts design, a contract assertion has a
+_kind_ (`pre`/`post`/`contract_assert`). Each assertion, separately, also has a
+_semantic_ (see table below). The configurability of those is up to the
+implementation, but it seems reasonable that one dimension offered is per-kind.
 
 ## Semantics
 
@@ -161,9 +169,8 @@ int halve(int x)
 
 `noexcept` and `[[throws_nothing]]`, as well as the deprecated exception
 specifications on functions, specify what kind, and whether, exceptions can be
-propagated from functions. Lewis Baker's paper [TODO FIND LEWIS PAPER CITATION]
-on allowable exception specifications is also proposing further additions in
-this space.
+propagated from functions. Lewis Baker's paper [@P3166R0] on allowable
+exception specifications is also proposing further additions in this space.
 
 This paper proposes a new assertion kind, to be added to `pre`, `post`, and
 `assert`: `excspec`. It is the assertion kind that is used for exception
@@ -213,8 +220,9 @@ Note that in this table, _assumed after_ depends on the semantic being fixed at
 compile-time. In general, the semantic is chosen per-evaluation, so it can be
 chosen at link-time or even run-time.
 
-The "Louis" semantic, in particular, has barely any reason to exist if it is
-not fixed at compile-time (its main use-case is reducing code-bloat).
+The "Louis" semantic, in particular, has barely any reason
+to exist if it is not fixed at compile-time (its main use-case is reducing
+code-bloat).
 
 ## Recommended practice
 
@@ -282,10 +290,10 @@ throwing.
 
 ### The "Louis" semantic
 
-Under the "Louis" semantic (just use a trap instruction on check failure),
-currently used by _libc++_ to implement cheap hardening checks, `noexcept`
-becomes even cheaper; the implementation is allowed to emit even shorter code,
-with no termination handler invocation.
+Under the "Louis" (for Louis Dionne) semantic (just use a trap instruction on
+check failure), currently used by _libc++_ to implement cheap hardening checks,
+`noexcept` becomes even cheaper; the implementation is allowed to emit even
+shorter code, with no termination handler invocation.
 
 The implementation may optimize based on the assumption of the function not
 throwing. This may be a good fit for low-resource applications.
@@ -333,7 +341,7 @@ optimize on nonthrowing behavior.
 
 This might be useful for negative testing, or last-ditch recovery when we don't
 need strong exception guarantees, but *do* need nontermination. This has been
-the argument in [TODO CITE BJARNE'S PAPER] - stack unwinding is sometimes still
+the argument in [@P2698R0] - stack unwinding is sometimes still
 the best of bad options when we have erroneous behaviour, instead of
 termination.
 
@@ -368,14 +376,14 @@ Oh, the poster-child for seemingly horrible choices.
 There are two primary use-cases for the `ignore` semantic:
 
 1. reducing the run-time of trusted code (so we don't *need* to check)
-2. escape-hatch for incorrect checks
+2. escape-hatch for incorrect checks.
 
-(1) barely applies in the exception-specification case; implementations both
+Case 1 barely applies in the exception-specification case; implementations both
 gain better optimization opportunities if they actually enforce the check (so,
 the negative of what (1) is supposed to do), and have expended effort in making
 that check either free or almost-free.
 
-(2), however, is not _that_ far-fetched. Nannying users is not the C++ way, and
+Case 2, however, is not _that_ far-fetched. Nannying users is not the C++ way, and
 if something falls out of a symmetry, we shouldn't disallow it with prejudice.
 We can recommend a warning, though.
 
@@ -432,11 +440,11 @@ There are pretty obvious problems when linking `noexcept` functions between
 libraries compiled with the `ignore` or `observe` and some kind of
 forced-termination semantic. This paper acknowledges that, and recommends that
 implementations do not allow such foolishness, similarly to mixing `-fPIC` and
-non-`-fPIC` modes; or libraries compiled with a givensanitizer vs libraries
+non-`-fPIC` modes; or libraries compiled with a given sanitizer vs libraries
 that were not (some combinations work, others don't).
 
 Ville Voutilainen suggested a separate resolution based on Bjarne's "nuclear
-plant use-case" [TODO CITE PAPER].
+plant use-case" [@P2698R0].
 
 Consider the following case:
 
@@ -446,9 +454,10 @@ Consider the following case:
 - `h()` has no unwinding tables for the scope where it calls `g()`, as `g()`
   cannot exit with an exception.
 
-In this case, it might be better to specify that destructors for objects in
-`h()` do not get run, as a trade-off for allowing careful users to do
-best-effort nonterminating recovery.
+We need to do some research to see if we can specify a "you get what you get"
+for unwinding `h()`'s frame on every ABI - on some, the "worst" that would
+happen is missing some destructors, but on others, it might not be
+implementable (perhaps the unwinder cannot locate the stack pointer).
 
 If compiled with a build flag canceling `noexcept` optimizations, `h()` could
 still have an unwinding table entry, and all would be well. Effectively, users
@@ -478,7 +487,8 @@ and unwind, achieving the goal of negative testing, while still allowing the
 required reflectable properties for code not under test.
 
 Most negative-testing scenarios can be better handled by a facility such as
-proposed in `[@D3138R0]`.
+proposed in `[@D3138R0]`, which allows testing `pre` and `post`-assertions
+without invoking the function.
 
 ### Example: negative testing through `noexcept` boundaries
 
@@ -491,8 +501,11 @@ void handle_contract_violation(contract_violation const& violation) {
       throw MyTestException(violation);
   }
   // 2 - if the exception-in-flight is the one we just threw in (1)
+  // we are already in some kind of catch (...) block (see Semantics)
+  auto excptr = std::current_exception();
   try {
-    std::rethrow_current_exception(); // do a Lippincott-switch [TODO check function name]
+    // do a Lippincott-switch
+    std::rethrow_exception(excptr);
   } catch (MyTestException const&) { // it's a test exception
     throw; // rethrow it // 3
   } catch (...) {
@@ -507,7 +520,7 @@ installed, and a test-driver below.
 
 ```cpp
 float sqrt(float x)
-  noexcept // (f2)
+  noexcept      // (f2)
   pre (x >= 0); // (f1)
 
 ```
@@ -535,7 +548,7 @@ deliberately calls the function-under-test out-of-contract.
 As an example, code that is exception-unsafe cannot be negative-tested using exceptions.
 
 ```cpp
-void wrapper1(std::function<void>()noexcept f)
+void wrapper1(std::function<void() noexcept> f)
 {
     std::lock_guard g(some_lock);
     ...
@@ -543,7 +556,7 @@ void wrapper1(std::function<void>()noexcept f)
      wrapper2(f);
 }
 
-void wrapper2(std::function<void>()noexcept f)
+void wrapper2(std::function<void() noexcept> f)
 {
     some_lock.lock();
     f();
@@ -621,3 +634,33 @@ actually throw; the default, however, would not lie.
   double throws, and unwinding code generation overhead.
 - Ville Voutilainen contributed his usual bushel of insightful ruminations, the
   answers to which were worked into the paper.
+- Bengt Gustaffson contributed a wonderfully thorough review and suggested
+  further possible ABI issues.
+
+---
+references:
+  - id: P3166R0
+    citation-label: 1
+    title: "Static Exception Specifications"
+    author:
+      family: Baker
+      given: Lewis
+    issued:
+      year: 2024
+    URL: https://isocpp.org/files/papers/P3166R0.html
+  - id: P3098R0
+    citation-label: 1
+    title: "Contracts for C++: Postcondition captures"
+    author:
+      family: Doumler
+      given: Timur
+    author:
+      family: Ažman
+      given: Gašper
+    author:
+      family: Berne
+      given: Joshua
+    issued:
+      year: 2024
+    URL: https://isocpp.org/files/papers/P3098R0.html
+---
