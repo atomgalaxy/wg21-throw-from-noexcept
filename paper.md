@@ -62,7 +62,8 @@ status-quo.
 # Definitions
 
 This secition defines the terms **prologue** and **epilogue**; it shows how
-`pre` and `post` assertions map to them, and 
+`pre` and `post` assertions map to them, and how the exceptions in the
+implementation are handled.
 
 As per Lisa Lippincott's work on function interfaces [@P0465R0], a
 function's contract checking interface comprises a function *prologue* and a
@@ -95,7 +96,7 @@ int halve(int x)
 }
 ```
 
-The function **prologue** (PRE, POST1, T1) notionally runs after the function
+The function's **prologue** (PRE, POST1, T1) notionally runs after the function
 parameters have been bound to function arguments and before entering the
 function body (implementation); it is here that, for instance, `pre`-condition
 assertions are checked, and data needed to check function postconditions is
@@ -104,20 +105,21 @@ captured.
 As an example, line (PRE) is equivalent to the [@P2900R5] `pre (x > 0)`, if we
 apply the `pre` assertion flavor to it.
 
-The function **epilogue** (POST2, T2, T3, T4) notionally runs after the return
-value has been constructed and the function body has exited; all local
-variables have been destroyed, but the function arguments are still within
-lifetime. It is here that postconditions are checked, for instance.
+The function's **epilogue** (POST2, T2, T3, T4) notionally runs after the return
+value has been constructed (in non-exceptional cases) and the function body has
+exited; all local variables have been destroyed, but the function arguments are
+still within lifetime. It is here that postconditions are checked, for instance.
 
 As an example, lines (POST1, POST2) are equivalent to [@P3098R0]'s
 (postcondition captures_ `post [old_x = x] (r: old_x < r)`, if we apply the
 `post` assertion flavor to (POST2).
 
 The construct in lines (T1, T2, T3, T4) is equivalent to the [@P2946R1]
-`[[throws_nothing]]` (with the `ensure` semantic), and would be equivalent to
-`noexcept` if it were reflectable (with the `noexcept()` query). This paper
-provisionally labels this section with the `excspec` assertion kind (see
-below), but we might need to split it into `exc`` and `excspec` later.
+`[[throws_nothing]]` (if the `contract_assert` has the `ignore` semantic), and
+would be equivalent to `noexcept` if it were reflectable (with the `noexcept()`
+query). This paper provisionally labels this section with the `excspec`
+assertion kind (see below), but we might need to split it into `exc`` and
+`excspec` later.
 
 # Proposed semantics
 
@@ -164,6 +166,8 @@ int halve(int x)
 ```
 
 :::
+
+The `contract_assert` needs to have a different assertion kind, perhaps `excspec`.
 
 ## A new assertion kind: `excspec`
 
