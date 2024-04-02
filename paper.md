@@ -220,7 +220,7 @@ Note that in this table, _assumed after_ depends on the semantic being fixed at
 compile-time. In general, the semantic is chosen per-evaluation, so it can be
 chosen at link-time or even run-time.
 
-The "Louis" semantic, in particular, has barely any reason
+The "Louis" [@P3191R0] semantic, in particular, has barely any reason
 to exist if it is not fixed at compile-time (its main use-case is reducing
 code-bloat).
 
@@ -290,10 +290,10 @@ throwing.
 
 ### The "Louis" semantic
 
-Under the "Louis" (for Louis Dionne) semantic (just use a trap instruction on
-check failure), currently used by _libc++_ to implement cheap hardening checks,
-`noexcept` becomes even cheaper; the implementation is allowed to emit even
-shorter code, with no termination handler invocation.
+Under the "Louis" [@P3191R0] (for Louis Dionne) semantic (just use a trap
+instruction on check failure), currently used by _libc++_ to implement cheap
+hardening checks, `noexcept` becomes even cheaper; the implementation is
+allowed to emit even shorter code, with no termination handler invocation.
 
 The implementation may optimize based on the assumption of the function not
 throwing. This may be a good fit for low-resource applications.
@@ -640,7 +640,7 @@ actually throw; the default, however, would not lie.
 ---
 references:
   - id: P3166R0
-    citation-label: 1
+    citation-label: P3166R0
     title: "Static Exception Specifications"
     author:
       family: Baker
@@ -648,8 +648,17 @@ references:
     issued:
       year: 2024
     URL: https://isocpp.org/files/papers/P3166R0.html
+  - id: P3191R0
+    citation-label: P3191R0
+    title: "Feedback on the scalability of contract violation handlers in P2900"
+    author:
+      family: Dionne
+      given: Louis
+    issued:
+      year: 2024
+    URL: https://isocpp.org/files/papers/P3191R0.pdf
   - id: P3098R0
-    citation-label: 1
+    citation-label: P3098R0
     title: "Contracts for C++: Postcondition captures"
     author:
       family: Doumler
