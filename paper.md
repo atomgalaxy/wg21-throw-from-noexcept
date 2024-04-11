@@ -355,7 +355,7 @@ This would also happen if the violation handler simply does nothing.
 of the function after a failed but ignored precondition check.
 
 _The authors are aware that ignoring check failures is generally a bad idea.
-Nevertheoless, the `observe` semantic is useful in transitional scenarios, so
+Nevertheless, the `observe` semantic is useful in transitional scenarios, so
 we chose to keep it; this is no different. Argue with the `observe` semantic._
 
 The primary use-case for this is newly marking functions `noexcept` or
