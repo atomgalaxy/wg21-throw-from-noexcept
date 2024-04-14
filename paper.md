@@ -53,81 +53,26 @@ what to do with erroneous behavior in general:
   could be seen as a way to let users define and catch erroneous behaviour at
   library interfaces.
 
+In fact, looking at the list at [except.terminate]{.sref}, it seems _all_ the
+bullet points deal with some kind of erroneous behaviour. Each point is
+discussed below.
+
 This paper brings breaching the `noexcept` specification of a function into the
-same discussion; and, since the Contracts facility aims to let users configure
+same discussion, along with all the other points where the language calls
+`std::terminate` and, since the Contracts facility aims to let users configure
 what to do when Erroneous behavior happens, allow novel ways of handling this
 eventuality.
 
-We propose to change the effect of throwing from a `noexcept` function be
-Erroneous Behaviour, and as such a function "epilogue" check failure (it's not
-a post-condition failure, as post-conditions are only guaranteed on
-nonexceptional function exit).
+The most delicate of these addtions of EB is classifying throwing from a
+`noexcept` function be Erroneous Behaviour, and as such a function "epilogue"
+check failure (it's not a post-condition failure, as post-conditions are only
+guaranteed on nonexceptional function exit). It is delicate because it would
+allow an exception to be thrown if a throwing violation handler were installed.
+This paper argues this is no different than any other instance of notionally
+nonthrowing code throwing because of a contract violation.
 
-We also propose it to have a configurable semantic as per the Contracts MVP
-([@P2900R5]). We propose a new semantic that is equivalent to the C++23
-status-quo.
-
-# Definitions
-
-This secition defines the terms **prologue** and **epilogue**; it shows how
-`pre` and `post` assertions map to them, and how the exceptions in the
-implementation are handled.
-
-As per Lisa Lippincott's work on function interfaces [@P0465R0], a
-function's contract checking interface comprises a function *prologue* and a
-function *epilogue*.
-
-Example, in pseudocode, with 2 extra keywords:
-
-- `result`, an alias for the return object
-- `implementation;` a statement denoting the function body, including the
-  `try`-block, if present.
-
-```cpp
-int halve(int x) 
-  interface {
-    // begin prologue
-    try {                     // T1
-      contract_assert(x > 0); // PRE
-      auto old_x = x;         // POST1
-    // end prologue
-      implementation; /* does not see old_x */
-    // begin epilogue
-      contract_assert(old_x < result); // POST2
-    } catch (...) {       // T2
-        std::terminate(); // T3
-    }                     // T4
-    // end epilogue
-  }
-/* implementation */ {
-    return x / 2;
-}
-```
-
-The function's **prologue** (PRE, POST1, T1) notionally runs after the function
-parameters have been bound to function arguments and before entering the
-function body (implementation); it is here that, for instance, `pre`-condition
-assertions are checked, and data needed to check function postconditions is
-captured.
-
-As an example, line (PRE) is equivalent to the [@P2900R5] `pre (x > 0)`, if we
-apply the `pre` assertion flavor to it.
-
-The function's **epilogue** (POST2, T2, T3, T4) notionally runs after the return
-value has been constructed (in non-exceptional cases) and the function body has
-exited; all local variables have been destroyed, but the function arguments are
-still within lifetime. It is here that postconditions are checked, for instance.
-
-As an example, lines (POST1, POST2) are equivalent to [@P3098R0]'s
-(postcondition captures_ `post [old_x = x] (r: old_x < r)`, if we apply the
-`post` assertion flavor to (POST2).
-
-The construct in lines (T1, T2, T3, T4) is equivalent to the [@P2946R1]
-`[[throws_nothing]]` (if the `contract_assert` has the `ignore` semantic), and
-would be equivalent to `noexcept` if it were reflectable (with the `noexcept()`
-query). This paper provisionally labels this section with the `excspec`
-assertion kind (see below), but we might need to split it into `exc`` and
-`excspec` later.
+We propose that `std::terminate` remains the "fallback behavior" in the case
+the contract is not enforced, which means the status-quo is conforming.
 
 # Proposed semantics
 
@@ -140,20 +85,19 @@ implementation, but it seems reasonable that one dimension offered is per-kind.
 
 We propose that throwing from a `noexcept` function be treated as a violation
 of a contract assertion in the function epilogue, instead of unconditionally
-calling `std::terminate()`. In terms of the example in the `definitions`, to
-change
+calling `std::terminate()`. In pseudocode, the change we would like to make is
 
 ::: cmptable
 
-### Current
+### C++23
 ```cpp
 int halve(int x) 
   interface {
     try {
       implementation;
     } catch (...) {
-      std::terminate();
 
+      std::terminate();
     }
   }
 { return x/2; }
@@ -166,8 +110,8 @@ int halve(int x)
     try {
       implementation;
     } catch (...) {
-      contract_assert(false);
-      throw;
+      contract_assert(false); // EB
+      std::terminate(); // fallback
     }
   }
 { return x/2; }
@@ -175,42 +119,31 @@ int halve(int x)
 
 :::
 
-The `contract_assert` needs to have a different assertion kind, perhaps `excspec`.
+(The terms above are defined in the [definitions](#definitions) section.)
 
-## A new assertion kind: `excspec`
+The `contract_assert` above needs to have a different assertion kind, perhaps
+`implicit` (compare [@P3100R0]).
 
-`noexcept` and `[[throws_nothing]]`, as well as the deprecated exception
-specifications on functions, specify what kind, and whether, exceptions can be
-propagated from functions. Lewis Baker's paper [@P3166R0] on allowable
-exception specifications is also proposing further additions in this space.
+## A new assertion kind: `implicit`
 
-This paper proposes a new assertion kind, to be added to `pre`, `post`, and
-`assert`: `excspec`. It is the assertion kind that is used for exception
-specification failures; that is, whenever a function throws an exception that
-it is not declared to throw (`noexcept`, `[[throws_nothing]]` and `throw()` are
-all covered by this rule).
+If we are to treat Erroneous Behaviour as violations of implicit contract
+specifications, we need a new assertion kind, also proposed in [@P3100R0].
 
-The reason to propose `excspec` and not merely `exc`, which would be used for
-all kinds of exception failures, including ones from future extensions that
-would allow checking exception *states* on exceptional exits, is that `catch`
-catches by _type_, which means that type failures are of a whole different
-nature (unwinding-wise) than program state failures.
+## Fallback Behavior
 
-We have not done detailed research on whether this is the correct choice; this
-is the initial recommendation of this paper, however.
+Erroneous Behavior is "well-defined" but Erroneous (and diagnosable). This
+implies the existence of a **Fallback Behavior** for each instance of Erroneous
+Behavior, which is whatever "well-defined" thing the implementation does if
+Erroneous Behavior occurs.
 
-## A new check semantic: `terminate`
+For the (proposed) Erroneous Behaviour this paper deals with, the Fallback
+Behavior should be the status-quo: `std::terminate()`.
 
-We propose a new semantic be added to the [@P2900R5]-proposed semantics, with
-the provisional name `terminate`. A contract check failure with the `terminate`
-semantic is equivalent to a call to `std::terminate`.
+If we treat Erroneous Behaviour as a contract violation, it therefore means
+that `std::terminate()` is called whenever such a contract check is not
+enforced.
 
-If an implementation chooses to default to the `terminate` semantic for
-exception specifiation check failures such as this one, a C++23 implementation
-is already conforming with this proposal.
-
-In the "matrix" of semantic properties, this is where the `terminate` semantic
-fits in: [TODO ANDREI ZISSU CITATION AND HARMONIZE MATRIX REPRESENTATION]
+## Survey of contract semantics
 
 +----------+--------+---------------+---------------+------------------+------------+
 | semantic | checks | calls handler | assumed after | terminates       | proposed   |
@@ -221,8 +154,6 @@ fits in: [TODO ANDREI ZISSU CITATION AND HARMONIZE MATRIX REPRESENTATION]
 +----------+--------+---------------+---------------+------------------+------------+
 | "Louis"  | yes    | no            | yes           | `trap`-ish       | TODO       |
 +----------+--------+---------------+---------------+------------------+------------+
-| terminate| yes    | no            | yes           | `std::terminate` | here       |
-+----------+--------+---------------+---------------+------------------+------------+
 | observe  | yes    | yes           | no            | no               | [@P2900R5] |
 +----------+--------+---------------+---------------+------------------+------------+
 | enforce  | yes    | yes           | yes           | `std::abort`-ish | [@P2900R5] |
@@ -232,9 +163,134 @@ Note that in this table, _assumed after_ depends on the semantic being fixed at
 compile-time. In general, the semantic is chosen per-evaluation, so it can be
 chosen at link-time or even run-time.
 
-The "Louis" [@P3191R0] semantic, in particular, has barely any reason
-to exist if it is not fixed at compile-time (its main use-case is reducing
-code-bloat).
+The "Louis" [@P3191R0] semantic (for Louis Dionne), in particular, has barely
+any reason to exist if it is not fixed at compile-time (its main use-case is
+reducing code-bloat).
+
+The semantics that call the handler (`observe` and `enforce`) may throw; we
+have to deal with propagating that exception.
+
+## Proposed new Erroneous Behaviour
+
+Along with the bullet points in [except.terminate]{.sref},
+`[[throws_nothing]]`, (deprecated) exception specifications, and Lewis Baker's
+[@P3166R0] also work in this space, and should be treated similarly.
+
+We give them names, to make them easier to discuss later.
+
+### Throw-before-landing
+
+> (1.1) when the exception handling mechanism, after completing the
+> initialization of the exception object but before activation of a handler for
+> the exception ([except.throw]), calls a function that exits via an exception,
+
+This is a *clear* erroneous situation. We are trying to invoke the landing pad
+but are interrupted by having to throw another exception. This should not
+happen in a correct program.
+
+### Landing-pad-search failed
+
+> (1.2) when the exception handling mechanism cannot find a handler for a
+> thrown exception ([except.handle])
+
+The **landing pad search** failed. That is clearly Erroneous Behaviour, the
+caller should have supplied a landing pad. It would be useful if it were
+possible for an implementation to diagnose this as EB.
+
+### `noexcept` (or-landing pad search cut off)
+
+> (1.3) when the search for a handler encounters the outermost block of a function
+> with a non-throwing exception specification
+
+This suggests that `noexcept` is really a **landing pad search boundary**, and
+_not_ "this function doesn't throw". In fact, argument construction happens
+outside the `noexcept` function boundary. Any call of a `noexcept` function
+that needs to construct arguments using non-`noexcept` code could still throw.
+
+### Throw while Stack-unwinding
+
+> (1.4) when the destruction of an object during stack unwinding terminates by
+> throwing an exception
+
+This is also clearly EB - the issue is that if we are already unwinding the
+stack, then the exception will also unwind the stack, just more vigorously.
+Since this is clearly impossible, we choose to terminate.
+
+### Static-init
+
+> (1.5) when initialization of a non-block variable with static or thread
+> storage duration ([basic.start.dynamic]) exits via an exception
+
+If you don't have a scope, how do you unwind? This should be diagnosable as EB.
+
+### Static-destroy
+
+> (1.6) when destruction of an object with static or thread storage duration
+> exits via an exception ([basic.start.term]{.sref})
+
+Again, impossible to unwind, especially when not in block scope. This should be
+EB.
+
+### Cleanup-callbacks
+
+> (1.7) when execution of a function registered with `std::atexit` or
+> `std::at_quick_exit` exits via an exception ([support.start.term]{.sref})
+
+We should require `noexcept` on these handlers, but that ship has sailed, so we
+should make it EB to throw from them.
+
+### Rethrow nothing
+
+> (1.8) when a throw-expression ([expr.throw]) with no operand attempts to rethrow an
+> exception and no exception is being handled ([except.throw])
+
+Trying to throw something that isn't there is a runtime error. It's Erroneous.
+Let's make it so.
+
+### Rethrow wrapped nothing
+
+> (1.9) when the function `std::nested_exception::rethrow_nested` is called for an
+> object that has captured no exception ([except.nested]{.sref})
+
+Same as before, this is clearly erroneous. This is a precondition violation -
+the precondition being "you're calling a function with one argument, you
+probably should supply it."
+
+### Thread-init
+
+> (1.10) when execution of the initial function of a thread exits via an
+> exception ([thread.thread.constr])
+
+This is again a "we don't know how to unwind" scenario.
+
+### Parallalel-algorithms
+
+> (1.11) for a parallel algorithm whose `ExecutionPolicy` specifies such
+> behavior ([execpol.seq]{.sref}, [execpol.par]{.sref},
+> [execpol.parunseq]{.sref}), when execution of an element access function
+> ([algorithms.parallel.defns]{.sref}) of the parallel algorithm exits via an
+> exception ([algorithms.parallel.exceptions]{.sref})
+
+The problem here is that we don't know how to coalesce multiple exceptions from
+parallel branches. EB.
+
+### Joinable-thread
+
+> (1.12) when the destructor or the move assignment operator is invoked on an object
+> of type `std::thread` that refers to a joinable thread
+> ([thread.thread.destr]{.sref}, [thread.thread.assign]{.sref})
+
+Another instance of "This is just incorrect but it's better to specify what it
+does". It should be EB.
+
+### Wait-postconditions
+
+> (1.13) when a call to a `wait()`, `wait_until()`, or `wait_for()` function on
+> a condition variable ([thread.condition.condvar]{.sref},
+> [thread.condition.condvarany]{.sref}) fails to meet a postcondition.
+
+It's even in the descriptions! This is a postcondition violation. It's EB.
+
 
 ## Recommended practice
 
@@ -269,7 +325,7 @@ fact.
 This avoids an ABI break but still provides for more use-cases than C++23 allows.
 
 
-### Source-location for `excspec` violations in `contract_violation` objects
+### Source-location for such violations in `contract_violation` objects
 
 - _If_ the implementation chooses to make the semantic of `exspec` checks configurable
 - _and if_ the semantic chosen invokes the violation handler (`observe`, `ensure`)
@@ -289,16 +345,60 @@ An analysis of the behavior under different conditions, and what it may be good 
 
 ## Program flow under various semantics
 
-... in which we discuss the behaviour of the proposal under various proposed semantics.
+... in which we discuss the behaviour of the proposal under various proposed
+semantics, for the `noexcept` case; the other cases are not ambiguous.
 
-### Default: behavior under the `terminate` semantic
+### All the non-`noexcept` cases
 
-If the semantic for `excspec` check failures is `terminate`, the behaviour is
-unchanged from C++23: `std::terminate` is called, and recovery is not possible
-without restarting the process.
+In the non-noexcept cases, calling the violation handler first instead of
+`std::terminate` should be an ultimately implementable thing (we call one
+function now, we can call a different one too). The question arises mostly
+around what to do if a violation handler throws.
 
-The implementation may optimize based on the assumption of the function not
-throwing.
+#### Nowhere to go: "Static-init", "Static-destroy", "Cleanup-callbacks", "Thread-init", "Joinable-thread"
+
+We really just cannot do anything but terminate. Throwing here would just
+recurse into one of these cases again, so we must terminate the program if the
+handler *also* throws.
+
+#### Precondition / Postcondition violations: "Wait-postconditions", "rethrow nothing", "rethrow wrapped nothing"
+
+These are really just regular non-ignorable contract violations. Throwing from
+a handler can do normal exception propagation.
+
+#### Exception Coalescing: "Throw while stack unwinding", "Parallel-algorithms"
+
+We could either treat this situation as a "nowhere to go" case, or allow the
+exception thrown from the handler to *replace* any exceptions that are in
+flight, potentially allowing recovery by finding the application-level
+contract-violation handler as opposed to directly terminating.
+
+This could very well leak the exceptions in flight; it still might be better
+than directly terminating.
+
+**OPEN QUESTION**: What does SG21 feel like? Any use-cases?
+
+#### Landing-pad search cases: "landing-pad-search failed", "`noexcept`", `[[throws_nothing]]`, other exception specification violations
+
+This is the titular topic of the paper - this paper proposes that the exception
+that triggered the behaviour is *caught* outside the handler, available as
+`std::current_exception()`. This happens at the point where the exception
+failed to find a landing pad, or observed the EB - outside the function with
+the exception specification.
+
+This means that throwing from the handler restarts the search for the landing
+pad; which means one can potentially find it.
+
+It also means exceptions can escape `noexcept` functions if carefully managed;
+this is a feature, not a bug, but it *is* a very sharp knife. Fortunately, it
+seems to be the same sharp knife as throwing violation handlers in general.
+
+## Exception specification discussion
+
+### Default: the ignore semantic
+
+Under the `ignore` semantic, we get the status-quo; the fallback behavior is
+invoked in all cases.
 
 ### The "Louis" semantic
 
@@ -401,12 +501,9 @@ We can recommend a warning, though.
 
 #### Recommended practice
 
-Implementations should warn if the `ignore` semantic is set on an `excspec`
-check.
-
 ## Can we even do this?
 
-The `std::terminate()` semantic is unlikely to be relied upon as a matter of
+The curent meaning is unlikely to be relied upon as a matter of
 deliberate control flow. It is quite clearly a stand-in for a postcondition
 violation; people do rely on exit handlers for recovery if `std::terminate`
 happens to get called because of a bug - but it seems doubtful that someone
@@ -557,7 +654,7 @@ Consider the following case:
 
 - `f()`, compiled with a non-terminating semantic (`ignore`/`observe`) calls
   `h()`, which `g() noexcept`, both compiled with a terminating semantic on
-  `excspec` checks.
+  `noexcept` checks.
 - `h()` has no unwinding tables for the scope where it calls `g()`, as `g()`
   cannot exit with an exception.
 
@@ -724,6 +821,68 @@ With this paper, `noexcept` would come to mean _does not throw in-contract_;
 and the chosen semantic would _actually_ deterimine whether the function can
 actually throw; the default, however, would not lie.
 
+# Definitions
+
+This secition defines the terms **prologue** and **epilogue**; it shows how
+`pre` and `post` assertions map to them, and how the exceptions in the
+implementation are handled. **It does not propose anything**
+
+As per Lisa Lippincott's work on function interfaces [@P0465R0], a
+function's contract checking interface comprises a function *prologue* and a
+function *epilogue*.
+
+Example, in pseudocode, with 2 extra keywords:
+
+- `result`, an alias for the return object
+- `implementation;` a statement denoting the function body, including the
+  `try`-block, if present.
+
+```cpp
+int halve(int x) 
+  interface {
+    // begin prologue
+    try {                     // T1
+      contract_assert(x > 0); // PRE
+      auto old_x = x;         // POST1
+    // end prologue
+      implementation; /* does not see old_x */
+    // begin epilogue
+      contract_assert(old_x < result); // POST2
+    } catch (...) {       // T2
+        std::terminate(); // T3
+    }                     // T4
+    // end epilogue
+  }
+/* implementation */ {
+    return x / 2;
+}
+```
+
+The function's **prologue** (PRE, POST1, T1) notionally runs after the function
+parameters have been bound to function arguments and before entering the
+function body (implementation); it is here that, for instance, `pre`-condition
+assertions are checked, and data needed to check function postconditions is
+captured.
+
+As an example, line (PRE) is equivalent to the [@P2900R5] `pre (x > 0)`, if we
+apply the `pre` assertion flavor to it.
+
+The function's **epilogue** (POST2, T2, T3, T4) notionally runs after the return
+value has been constructed (in non-exceptional cases) and the function body has
+exited; all local variables have been destroyed, but the function arguments are
+still within lifetime. It is here that postconditions are checked, for instance.
+
+As an example, lines (POST1, POST2) are equivalent to [@P3098R0]'s
+(postcondition captures_ `post [old_x = x] (r: old_x < r)`, if we apply the
+`post` assertion flavor to (POST2).
+
+The construct in lines (T1, T2, T3, T4) is equivalent to the [@P2946R1]
+`[[throws_nothing]]` (if the `contract_assert` has the `ignore` semantic), and
+would be equivalent to `noexcept` if it were reflectable (with the `noexcept()`
+query). This paper provisionally labels this section with the `implicit`
+assertion kind.
+
+
 # Prior art
 
 - [@N3248] discusses the reasons we need the Lakos rule, which are obviated by the proposed change
@@ -808,6 +967,17 @@ references:
     issued:
       year: 2024
     URL: https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2946r1.pdf
+  - id: P3100R0
+    citation-label: P3100R0
+    title: Contracts, Undefined Behaviour, and Erroneous Behaviour
+    author:
+      given: Timur
+      family: Doumler
+    issued:
+      year: 2024
+      month: 04
+      day: 15
+    URL: https://isocpp.org/files/papers/P3100R0.html
   - id: P2795R5
     citation-label: P2795R5
     title: Erroneous behaviour for uninitialized reads
