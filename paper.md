@@ -19,7 +19,6 @@ toc-depth: 2
 
 <!--
 TODO:
-- Update reference of D3138R0.  P3138R0 is views::cache_last, and unrelated to this topic
 - (done-ish) remove the "Lakos Rule" references from the text.
 - research original motivation of terminate on noexcept - are we fully covering
   the original rationale with our new approach?
@@ -27,6 +26,12 @@ TODO:
 - THE MOTIVATION SECTION IS MISSING. We motivate it during the text (Lakos rule
   + Bjarne's continuing after failure) but there's no definitive section on
     that.
+- TODO suggest EWG poll: should noexcept enforcement be limited to
+  hard-enforced semantics (Louis, enforce)?
+  https://chat.isocpp.org/general/pl/yrf7ermryjgizqsy3ox7uz1fky is the thread
+  with the discussion.
+- Find all the other ways we call std::terminate() in erroneous situations and
+  add them to the paper.
 -->
 
 # Introduction
@@ -42,7 +47,7 @@ function contract.
 There is a concerted effort underway in WG21 to both classify and figure out
 what to do with erroneous behavior in general:
 
-- Thomas Koppe's [@P2795R4] introduces the concept of Erroneous behaviour
+- Thomas Köppe's [@P2795R5] introduces the concept of Erroneous behaviour
   into the language.
 - The entire Contracts facility ([@P2900R5] and associated papers from SG21)
   could be seen as a way to let users define and catch erroneous behaviour at
@@ -220,7 +225,7 @@ fits in: [TODO ANDREI ZISSU CITATION AND HARMONIZE MATRIX REPRESENTATION]
 +----------+--------+---------------+---------------+------------------+------------+
 | observe  | yes    | yes           | no            | no               | [@P2900R5] |
 +----------+--------+---------------+---------------+------------------+------------+
-| ensure   | yes    | yes           | yes           | `std::abort`-ish | [@P2900R5] |
+| enforce  | yes    | yes           | yes           | `std::abort`-ish | [@P2900R5] |
 +----------+--------+---------------+---------------+------------------+------------+
 
 Note that in this table, _assumed after_ depends on the semantic being fixed at
@@ -589,7 +594,7 @@ and unwind, achieving the goal of negative testing, while still allowing the
 required reflectable properties for code not under test.
 
 Most negative-testing scenarios can be better handled by a facility such as
-proposed in `[@D3138R0]`, which allows testing `pre` and `post`-assertions
+proposed in [@D3183R0], which allows testing `pre` and `post`-assertions
 without invoking the function.
 
 ### Example: negative testing through `noexcept` boundaries
@@ -774,6 +779,17 @@ references:
     issued:
       year: 2024
     URL: https://isocpp.org/files/papers/P3098R0.html
+  - id: D3183R0
+    citation-label: D3183R0
+    title: "Contract testing support"
+    author:
+      family: Gustaffson
+      given: Bengt
+    issued:
+      year: 2024
+      month: 04
+      day: 15
+    URL: https://isocpp.org/files/papers/D3183R0.pdf
   - id: Abrahams
     citation-label: Abrahams
     title: "Lessons Learned from Specifying Exception-Safety for the C++ Standard Library"
@@ -792,4 +808,15 @@ references:
     issued:
       year: 2024
     URL: https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2946r1.pdf
+  - id: P2795R5
+    citation-label: P2795R5
+    title: Erroneous behaviour for uninitialized reads
+    author:
+      given: Thomas
+      family: Köppe
+    issued:
+      year: 2024
+      month: 03
+      day: 22
+    URL: https://isocpp.org/files/papers/P2795R5.html
 ---
