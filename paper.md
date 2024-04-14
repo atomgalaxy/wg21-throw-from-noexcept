@@ -11,12 +11,15 @@ author:
     email: <jeff@caffeinated.me.uk>
   - name: Andrei Zissu
     email: <andrziss@gmail.com>
+  - name: Ben Craig
+    email: <ben.craig@gmail.com>
 toc: true
 toc-depth: 2
 ---
 
 <!--
 TODO:
+- Update reference of D3138R0.  P3138R0 is views::cache_last, and unrelated to this topic
 - (done-ish) remove the "Lakos Rule" references from the text.
 - research original motivation of terminate on noexcept - are we fully covering
   the original rationale with our new approach?
@@ -429,14 +432,109 @@ This property is important in
 - correctness of exception-unsafe code that wants to ensure some
   dependency-injected component won't jeoperdise its correctness.
 
-That said, allowing exceptions to propagate from `noexcept` functions is
-extremely dangerous due to algorithm choice, and the business function owner
-must do careful trade-off analysis to determine whether the greater danger is
-unwinding or termination. The flip side is - at present, they aren't permitted
+The "no-throw" guarantee [@Abrahams] is a property that developers rely on for program correctness.
+The "no-throw" guarantee isn't always used in conjunction with `noexcept`.
+In the standard, it is often spelled as "Throws: Nothing.".
+If a function that is documented as "Throws: Nothing" starts throwing, then program invariants can start to break.
+Exceptions escaping from `noexcept` functions is no worse than throwing from a "Throws: Nothing" function in terms of program correctness.
+
+[@P2946R1] also proposes a way to annotate functions with the "no-throw" guarantee, while allowing them to still throw.
+This is done with a configurable `[[throws_nothing]]` attribute, and it is very similar to this proposal, except that it uses a new facility rather than modifying the existing `noexcept` facilities, and that it doesn't (at present) interact with P2900's contract violation handlers.
+
+Consider the following code example:
+```cpp
+struct reservations {
+  using resource_id = int;
+  static constexpr size_t capacity = 2;
+
+  size_t m_size = 0;
+  resource_id m_reservations[capacity];
+
+  resource_id operator[](size_t i) const pre(i < m_size && i < capacity) {
+    return m_reservations[i];
+  }
+
+  void add_reservation(resource_id id) pre(id + 1 < capacity) {
+    ::reserve_resource(id);
+    m_reservations[m_size++] = id;
+  }
+
+  void clear() {
+    /* perhaps noexcept ? */
+    /* perhaps [[ throws_nothing ]] ? */
+    /* perhaps "Throws: Nothing." ? */
+    for (size_t i = 0; i < m_size; ++i) {
+      ::release_resource((*this)[i]);
+    }
+    m_size = 0;
+  }
+
+  ~reservations() { clear(); }
+
+  reservations &operator=(reservations &&other)
+  /* perhaps noexcept ? */
+  /* perhaps [[ throws_nothing ]] ? */
+  /* perhaps "Throws: Nothing." ? */
+  {
+    if (&other == this)
+      return *this;
+    clear();
+    for (size_t i = 0; i < other.m_size; ++i) {
+      m_reservations[i] = other[i]; // violation when i >= capacity
+      ++m_size;
+    }
+    other.m_size = 0;
+    return *this;
+  }
+};
+
+void race(reservations &r) {
+    // buggy code
+    std::jthread t1([&] {
+        r.add_reservation(g_resource1);
+        // ...
+    });
+    std::jthread t2([&] {
+        r.add_reservation(g_resource2);
+        // ...
+    });
+}
+
+void fragile_clear() {
+    reservations r1;
+    r1.add_reservation(g_resource0);
+    race(r1);
+    r1.clear(); // BOOM
+    // clear() and  ~reservations both release (at least) g_resource
+}
+
+void fragile_move() {
+    reservations r2;
+    r2.add_reservation(g_resource0);
+    race(r2);
+    reservations r3;
+    r3 = std::move(r2); // BOOM
+    // r2 and r3 both release (at least) g_resource0
+}
+```
+
+The contract on `operator[]` is exactly the kind of high value contract that those concerned about safety and security are most interested in.
+Developers also expect `operator[]` to have the "no-throw" guarantee.
+Developers also expect to be able to get performance benefits by marking move operations as `noexcept`.
+There is no clear right answer as to how to combine the "no-throw" guarantee with throwing contract violation handlers.
+
+|Strategy|fast std::vector resize|avoids terminate|avoids library UB|
+|-|-|-|-|
+|"Throws: Nothing."|no|yes|no|
+|terminate `[[throws_nothing]]`|no|no|yes|
+|throwing `[[throws_nothing]]`|no|yes|no|
+|terminate `noexcept`|yes|no|yes|
+|throwing `noexcept`|yes|yes|no|
+
+With a configurable `noexcept`, the end developer (rather than the library developer) can determine wither the greater danger is unwinding or termination, all while still getting the benefits of better algorithm selection.  The flip side is - at present, they aren't permitted
 such an evaluation -- the standard has made it for them.
 
-Also note that this is **NOT THE PROPOSED DEFAULT**. The default is the
-status-quo.
+Also note that allowing exceptions to escape `noexcept` functions is **NOT THE PROPOSED DEFAULT**. The default is the status-quo.
 
 ### Stack unwinding past `noexcept` and ABI
 
@@ -676,4 +774,22 @@ references:
     issued:
       year: 2024
     URL: https://isocpp.org/files/papers/P3098R0.html
+  - id: Abrahams
+    citation-label: Abrahams
+    title: "Lessons Learned from Specifying Exception-Safety for the C++ Standard Library"
+    author:
+      family: Abrahams
+      given: David
+    issued:
+      year: 2001
+    URL: https://www.boost.org/community/exception_safety.html
+  - id: P2946R1
+    citation-label: P2946R1
+    title: "A flexible solution to the problems of `noexcept`"
+    author:
+      family: Halpern
+      given: Pablo
+    issued:
+      year: 2024
+    URL: https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2946r1.pdf
 ---
