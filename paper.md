@@ -124,6 +124,10 @@ int halve(int x)
 The `contract_assert` above needs to have a different assertion kind, perhaps
 `implicit` (compare [@P3100R0]).
 
+_Note:_ with `ignore` semantics, we get the status-quo behaviour; with a
+terminating semantic ("Louis" or `enforce`), we terminate according to that
+semantic instead.
+
 ## A new assertion kind: `implicit`
 
 If we are to treat Erroneous Behaviour as violations of implicit contract
@@ -145,6 +149,8 @@ enforced.
 
 ## Survey of contract semantics
 
+(A discussion of this table is also in [@P3237R0]).
+
 +----------+--------+---------------+---------------+------------------+------------+
 | semantic | checks | calls handler | assumed after | terminates       | proposed   |
 +==========+========+===============+===============+==================+============+
@@ -152,7 +158,7 @@ enforced.
 +----------+--------+---------------+---------------+------------------+------------+
 | ignore   | no     | no            | no            | no               | [@P2900R5] |
 +----------+--------+---------------+---------------+------------------+------------+
-| "Louis"  | yes    | no            | yes           | `trap`-ish       | TODO       |
+| "Louis"  | yes    | no            | yes           | `trap`-ish       | [@P3191R0] |
 +----------+--------+---------------+---------------+------------------+------------+
 | observe  | yes    | yes           | no            | no               | [@P2900R5] |
 +----------+--------+---------------+---------------+------------------+------------+
@@ -186,7 +192,8 @@ We give them names, to make them easier to discuss later.
 
 This is a *clear* erroneous situation. We are trying to invoke the landing pad
 but are interrupted by having to throw another exception. This should not
-happen in a correct program.
+happen in a correct program. (This scenario happens, for instance, if the
+exception is caught by value and its copy constructor throws).
 
 ### Landing-pad-search failed
 
@@ -241,8 +248,8 @@ should make it EB to throw from them.
 
 ### Rethrow nothing
 
-> (1.8) when a throw-expression ([expr.throw]) with no operand attempts to rethrow an
-> exception and no exception is being handled ([except.throw])
+> (1.8) when a throw-expression ([expr.throw]{.sref}) with no operand attempts to rethrow an
+> exception and no exception is being handled ([except.throw]{.sref})
 
 Trying to throw something that isn't there is a runtime error. It's Erroneous.
 Let's make it so.
@@ -259,7 +266,7 @@ probably should supply it."
 ### Thread-init
 
 > (1.10) when execution of the initial function of a thread exits via an
-> exception ([thread.thread.constr])
+> exception ([thread.thread.constr]{.sref})
 
 This is again a "we don't know how to unwind" scenario.
 
@@ -376,7 +383,11 @@ contract-violation handler as opposed to directly terminating.
 This could very well leak the exceptions in flight; it still might be better
 than directly terminating.
 
-**OPEN QUESTION**: What does SG21 feel like? Any use-cases?
+Allowing the handler to replace the active exceptions would allow programmable
+exception coalescing, although we'd need some way to get at the uncaught
+exceptions to do that, and this paper makes no additional provision for that.
+
+**OPEN QUESTION**: What does SG21 feel like? Any use-cases? Any implementation ideas?
 
 #### Landing-pad search cases: "landing-pad-search failed", "`noexcept`", `[[throws_nothing]]`, other exception specification violations
 
@@ -419,15 +430,15 @@ of handling of erroneous behavior, as opposed to the termination handler, which
 has a difficult time distinguishing between erroneous terminations and clean
 terminations.
 
-The implementation still gets to optimize based on the assumption that the
-function cannot throw.
+See "observe" for the notes on recovery through exceptions, however, since the
+handler does get to throw, which does not lead to termination.
 
 Compared to the "Louis" and `terminate` semantics, more static program data may
 be stored because of source location information.
 
 ### The `observe` semantic
 
-The `observe` semantic is *a lot* more interesting than the previous three -
+The `observe` semantic is very interesting for the same reason `enforce` is -
 the program owner may now use the violation handler as a general-purpose
 recovery mechanism.
 
@@ -457,10 +468,8 @@ the argument in [@P2698R0] - stack unwinding is sometimes still
 the best of bad options when we have erroneous behaviour, instead of
 termination.
 
-This would also happen if the violation handler simply does nothing.
-
-**NOTE:** this is consistent with allowing the program to proceed to the body
-of the function after a failed but ignored precondition check.
+**NOTE:** this is roughly on-par in danger with allowing the program to proceed
+to the body of the function after a failed but ignored precondition check.
 
 _The authors are aware that ignoring check failures is generally a bad idea.
 Nevertheless, the `observe` semantic is useful in transitional scenarios, so
@@ -797,26 +806,13 @@ The point is to enable making the trade-off, not allowing unsafe code. Failure
 modes are often at direct odds, and anwering "what is safe" requires the
 business context of an application.
 
-## Throwing while an exception is in-flight
-
-Throwing an exception (say, from a destructor) during stack unwinding while an
-exception is in flight is also a terminating condition, and also clearly a form
-of erroneous behavior.
-
-We suggest also treating this condition as a contract violation; the
-intricacies of this case will probably spin off into a second paper, however.
-
-Note that before entering the violation handler, the exception is caught - a
-throwing violation handler under `observe` will not cause a parallel exception
-to propagate (and cause termination).
-
 ## On `noexcept(contract_assert(false))`
 
 If this paper is accepted, it would become very difficult to argue for the expression
 
 ```cpp
 // status quo: contract_assert(cond) is a statement
-// this is not legal cod3
+// this is not legal code
 noexcept(contract_assert(false))
 ```
 
@@ -944,7 +940,7 @@ references:
       year: 2024
     URL: https://isocpp.org/files/papers/P3098R0.html
   - id: D3183R0
-    citation-label: D3183R0
+    citation-label: P3183R0
     title: "Contract testing support"
     author:
       family: Gustaffson
@@ -953,7 +949,7 @@ references:
       year: 2024
       month: 04
       day: 15
-    URL: https://isocpp.org/files/papers/D3183R0.pdf
+    URL: https://isocpp.org/files/papers/P3183R0.pdf
   - id: Abrahams
     citation-label: Abrahams
     title: "Lessons Learned from Specifying Exception-Safety for the C++ Standard Library"
@@ -994,4 +990,15 @@ references:
       month: 03
       day: 22
     URL: https://isocpp.org/files/papers/P2795R5.html
+  - id: P3237R0
+    citation-label: P3237R0
+    title: "Matrix Representation of Contract Semantics"
+    author:
+        family: Zissu
+        given: Andrei
+    issued:
+        year: 2024
+        month: 04
+        day: 16
+    URL: https://isocpp.org/files/papers/D3237R0.pdf
 ---
