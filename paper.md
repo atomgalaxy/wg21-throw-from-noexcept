@@ -501,7 +501,7 @@ We can recommend a warning, though.
 
 ## Can we even do this?
 
-The curent meaning is unlikely to be relied upon as a matter of
+The current meaning is unlikely to be relied upon as a matter of
 deliberate control flow. It is quite clearly a stand-in for a postcondition
 violation; people do rely on exit handlers for recovery if `std::terminate`
 happens to get called because of a bug - but it seems doubtful that someone
