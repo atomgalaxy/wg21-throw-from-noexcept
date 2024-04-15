@@ -544,48 +544,49 @@ This is done with a configurable `[[throws_nothing]]` attribute, and it is very 
 Consider the following code example:
 ```cpp
 struct reservations {
-  using resource_id = int;
-  static constexpr size_t capacity = 2;
+    using resource_id = int;
+    static constexpr size_t capacity = 2;
 
-  size_t m_size = 0;
-  resource_id m_reservations[capacity];
+    size_t m_size = 0;
+    resource_id m_reservations[capacity];
 
-  resource_id operator[](size_t i) const pre(i < m_size && i < capacity) {
-    return m_reservations[i];
-  }
+    resource_id operator[](size_t i) const pre(i < m_size && i < capacity) {
+        return m_reservations[i];
+    }
 
-  void add_reservation(resource_id id) pre(id + 1 < capacity) {
-    ::reserve_resource(id);
-    m_reservations[m_size++] = id;
-  }
+    void add_reservation(resource_id id) pre(id + 1 < capacity) {
+        ::reserve_resource(id);
+        m_reservations[m_size++] = id;
+    }
 
-  void clear() {
+    void clear()
     /* perhaps noexcept ? */
     /* perhaps [[ throws_nothing ]] ? */
     /* perhaps "Throws: Nothing." ? */
-    for (size_t i = 0; i < m_size; ++i) {
-      ::release_resource((*this)[i]);
+    {
+        for (size_t i = 0; i < m_size; ++i) {
+            ::release_resource((*this)[i]);
+        }
+        m_size = 0;
     }
-    m_size = 0;
-  }
 
-  ~reservations() { clear(); }
+    ~reservations() { clear(); }
 
-  reservations &operator=(reservations &&other)
-  /* perhaps noexcept ? */
-  /* perhaps [[ throws_nothing ]] ? */
-  /* perhaps "Throws: Nothing." ? */
-  {
-    if (&other == this)
-      return *this;
-    clear();
-    for (size_t i = 0; i < other.m_size; ++i) {
-      m_reservations[i] = other[i]; // violation when i >= capacity
-      ++m_size;
+    reservations &operator=(reservations &&other)
+    /* perhaps noexcept ? */
+    /* perhaps [[ throws_nothing ]] ? */
+    /* perhaps "Throws: Nothing." ? */
+    {
+        if (&other == this)
+            return *this;
+        clear();
+        for (size_t i = 0; i < other.m_size; ++i) {
+            m_reservations[i] = other[i]; // violation when i >= capacity
+            ++m_size;
+        }
+        other.m_size = 0;
+        return *this;
     }
-    other.m_size = 0;
-    return *this;
-  }
 };
 
 void race(reservations &r) {
@@ -605,6 +606,7 @@ void fragile_clear() {
     r1.add_reservation(g_resource0);
     race(r1);
     r1.clear(); // BOOM
+
     // clear() and  ~reservations both release (at least) g_resource
 }
 
@@ -614,6 +616,7 @@ void fragile_move() {
     race(r2);
     reservations r3;
     r3 = std::move(r2); // BOOM
+
     // r2 and r3 both release (at least) g_resource0
 }
 ```
