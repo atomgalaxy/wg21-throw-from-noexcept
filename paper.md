@@ -878,7 +878,7 @@ exited; all local variables have been destroyed, but the function arguments are
 still within lifetime. It is here that postconditions are checked, for instance.
 
 As an example, lines (POST1, POST2) are equivalent to [@P3098R0]'s
-(postcondition captures_ `post [old_x = x] (r: old_x < r)`, if we apply the
+postcondition captures `post [old_x = x] (r: old_x < r)`, if we apply the
 `post` assertion flavor to (POST2).
 
 The construct in lines (T1, T2, T3, T4) is equivalent to the [@P2946R1]
