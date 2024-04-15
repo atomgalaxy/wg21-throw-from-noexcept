@@ -327,7 +327,7 @@ This avoids an ABI break but still provides for more use-cases than C++23 allows
 
 ### Source-location for such violations in `contract_violation` objects
 
-- _If_ the implementation chooses to make the semantic of `exspec` checks configurable
+- _If_ the implementation chooses to make the semantic of `implicit` checks configurable
 - _and if_ the semantic chosen invokes the violation handler (`observe`, `ensure`)
 
 then the implementation _may_ choose to provide useful failure information
