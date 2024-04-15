@@ -695,6 +695,10 @@ Most negative-testing scenarios can be better handled by a facility such as
 proposed in [@D3183R0], which allows testing `pre` and `post`-assertions
 without invoking the function.
 
+The "Lakos rule" can be seen as a "good" solution,
+throwing violation handlers for `noexcept` csn be seen as a "better" solution,
+and [@D3183R0] assertion execution can be seen as the "best" solution.
+
 ### Example: negative testing through `noexcept` boundaries
 
 In a unit test, one might install the following handler:
