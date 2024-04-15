@@ -621,11 +621,11 @@ void fragile_move() {
 ```
 
 The contract on `operator[]` is exactly the kind of high value contract that those concerned about safety and security are most interested in.
-Developers also expect `operator[]` to have the "no-throw" guarantee.
+Developers expect `operator[]` to have the "no-throw" guarantee.
 Developers also expect to be able to get performance benefits by marking move operations as `noexcept`.
 There is no clear right answer as to how to combine the "no-throw" guarantee with throwing contract violation handlers.
 
-|Strategy|fast std::vector resize|avoids terminate|avoids library UB|
+|Strategy|fast std::vector resize|library UB|terminates|
 |-|-|-|-|
 |"Throws: Nothing."|no|yes|no|
 |terminate `[[throws_nothing]]`|no|no|yes|
@@ -633,7 +633,7 @@ There is no clear right answer as to how to combine the "no-throw" guarantee wit
 |terminate `noexcept`|yes|no|yes|
 |throwing `noexcept`|yes|yes|no|
 
-With a configurable `noexcept`, the end developer (rather than the library developer) can determine wither the greater danger is unwinding or termination, all while still getting the benefits of better algorithm selection.  The flip side is - at present, they aren't permitted
+With a configurable `noexcept`, the end developer (rather than the library developer) can determine whether the greater danger is unwinding or termination, all while still getting the benefits of better algorithm selection.  The flip side is - at present, they aren't permitted
 such an evaluation -- the standard has made it for them.
 
 Also note that allowing exceptions to escape `noexcept` functions is **NOT THE PROPOSED DEFAULT**. The default is the status-quo.
