@@ -1000,5 +1000,5 @@ references:
         year: 2024
         month: 04
         day: 16
-    URL: https://isocpp.org/files/papers/D3237R0.pdf
+    URL: https://isocpp.org/files/papers/P3237R0.pdf
 ---
