@@ -499,8 +499,6 @@ Case 2, however, is not _that_ far-fetched. Nannying users is not the C++ way, a
 if something falls out of a symmetry, we shouldn't disallow it with prejudice.
 We can recommend a warning, though.
 
-#### Recommended practice
-
 ## Can we even do this?
 
 The curent meaning is unlikely to be relied upon as a matter of
